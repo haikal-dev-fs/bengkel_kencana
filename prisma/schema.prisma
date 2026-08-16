@@ -85,3 +85,12 @@ model TransactionItem {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 }
+
+model Setting {
+  id        Int      @id @default(1)
+  name      String   @default("BENGKEL PRO")
+  address   String   @default("Alamat Bengkel Belum Diatur")
+  phone     String   @default("08123456789")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

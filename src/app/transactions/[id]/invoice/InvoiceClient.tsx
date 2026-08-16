@@ -2,7 +2,7 @@
 import React, { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function InvoiceClient({ transaction }: { transaction: any }) {
+export default function InvoiceClient({ transaction, setting }: { transaction: any; setting: any }) {
   const searchParams = useSearchParams();
   const autoAction = searchParams.get("action");
 
@@ -43,11 +43,11 @@ export default function InvoiceClient({ transaction }: { transaction: any }) {
       <div id="invoice-content" style={{ backgroundColor: "white", padding: "3rem", width: "100%", maxWidth: "800px", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", color: "#111" }}>
         
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #eee", paddingBottom: "1.5rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2rem", borderBottom: "2px solid #e2e8f0", paddingBottom: "1rem" }}>
           <div>
-            <h1 style={{ fontSize: "2rem", fontWeight: "bold", margin: 0, color: "#2563eb" }}>BENGKEL PRO</h1>
-            <p style={{ margin: "0.25rem 0", color: "#555" }}>Jl. Raya Otomotif No. 123, Kota Bengkel</p>
-            <p style={{ margin: "0", color: "#555" }}>Telp: 0812-3456-7890</p>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: "bold", margin: 0, color: "#1e293b" }}>{setting?.name || "BENGKEL PRO"}</h1>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.875rem" }}>{setting?.address || "Jl. Kencana Raya No. 123"}</p>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.875rem" }}>Telp: {setting?.phone || "081234567890"}</p>
           </div>
           <div style={{ textAlign: "right" }}>
             <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", margin: 0, color: "#333", textTransform: "uppercase" }}>Invoice / Nota</h2>

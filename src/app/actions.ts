@@ -352,3 +352,23 @@ export async function updateTransaction(id: string, data: {
   revalidatePath("/sparepart");
   revalidatePath("/");
 }
+
+export async function updateSetting(data: { name: string; address: string; phone: string }) {
+  await prisma.setting.upsert({
+    where: { id: 1 },
+    update: {
+      name: data.name,
+      address: data.address,
+      phone: data.phone,
+    },
+    create: {
+      id: 1,
+      name: data.name,
+      address: data.address,
+      phone: data.phone,
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/transactions");
+}

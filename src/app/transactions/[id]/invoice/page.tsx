@@ -14,5 +14,9 @@ export default async function InvoicePage({ params }: { params: { id: string } }
 
   if (!transaction) return notFound();
 
-  return <InvoiceClient transaction={transaction} />;
+  const setting = await prisma.setting.findUnique({
+    where: { id: 1 },
+  });
+
+  return <InvoiceClient transaction={transaction} setting={setting} />;
 }
