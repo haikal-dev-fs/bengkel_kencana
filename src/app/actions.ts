@@ -158,6 +158,9 @@ export async function createPurchase(data: {
         },
       });
     }
+  }, {
+    maxWait: 5000,
+    timeout: 20000,
   });
 
   revalidatePath("/purchases");
@@ -224,6 +227,9 @@ export async function createTransaction(data: {
           });
         }
       }
+    }, {
+      maxWait: 5000,
+      timeout: 20000,
     });
 
     revalidatePath("/transactions");
@@ -262,6 +268,9 @@ export async function deleteTransaction(id: string) {
     }
 
     await tx.transaction.delete({ where: { id } });
+  }, {
+    maxWait: 5000,
+    timeout: 20000,
   });
 
   revalidatePath("/transactions");
@@ -349,6 +358,9 @@ export async function updateTransaction(id: string, data: {
           });
         }
       }
+    }, {
+      maxWait: 5000,
+      timeout: 20000,
     });
 
     revalidatePath("/transactions");
