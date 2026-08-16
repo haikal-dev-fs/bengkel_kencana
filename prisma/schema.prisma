@@ -1,0 +1,87 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Sparepart {
+  id               String            @id @default(cuid())
+  partNumber       String            @unique
+  name             String
+  purchasePrice    Int
+  sellingPrice     Int
+  initialStock     Int               @default(0)
+  currentStock     Int               @default(0)
+  minStock         Int               @default(0)
+  purchases        Purchase[]
+  transactionItems TransactionItem[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Service {
+  id               String            @id @default(cuid())
+  name             String
+  price            Int
+  transactionItems TransactionItem[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Purchase {
+  id            String    @id @default(cuid())
+  date          DateTime  @default(now())
+  invoiceNumber String
+  supplier      String
+  qty           Int
+  unitPrice     Int
+  totalPrice    Int
+  
+  sparepartId   String
+  sparepart     Sparepart @relation(fields: [sparepartId], references: [id])
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Transaction {
+  id           String            @id @default(cuid())
+  woNumber     String            @unique
+  date         DateTime          @default(now())
+  plateNumber  String
+  customerName String
+  
+  items        TransactionItem[]
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model TransactionItem {
+  id             String      @id @default(cuid())
+  itemType       String      // "SPAREPART" | "SERVICE"
+  qty            Int
+  sellingPrice   Int
+  totalSelling   Int
+  purchasePrice  Int
+  totalPurchase  Int
+  profit         Int
+  
+  transactionId  String
+  transaction    Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  sparepartId    String?
+  sparepart      Sparepart?  @relation(fields: [sparepartId], references: [id])
+  
+  serviceId      String?
+  service        Service?    @relation(fields: [serviceId], references: [id])
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}

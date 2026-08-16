@@ -1,69 +1,83 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import { prisma } from "@/lib/prisma"
 
-export default function Home() {
+export default async function Dashboard() {
+  // Fetch aggregate data
+  const revenueResult = await prisma.transactionItem.aggregate({
+    _sum: {
+      totalSelling: true,
+      profit: true
+    }
+  });
+
+  const totalRevenue = revenueResult._sum.totalSelling || 0;
+  const totalProfit = revenueResult._sum.profit || 0;
+
+  // Fetch spareparts to check critical stock
+  const allParts = await prisma.sparepart.findMany({
+    orderBy: { currentStock: 'asc' }
+  });
+  
+  const criticalParts = allParts.filter(p => p.currentStock <= p.minStock);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div>
+      <h1>DASHBOARD UTAMA BENGKEL</h1>
+      <p className="text-muted mb-4">Sistem Informasi Pergerakan Sparepart, Riwayat Servis & Keuntungan v2</p>
+
+      <div className="grid grid-cols-3 mb-4">
+        <div className="card" style={{ borderTop: "4px solid var(--accent)", textAlign: "center" }}>
+          <h2 className="form-label" style={{ textTransform: "uppercase" }}>Total Pendapatan</h2>
+          <div className="text-accent" style={{ fontSize: "2rem", fontWeight: "700" }}>
+            Rp {totalRevenue.toLocaleString('id-ID')}
+          </div>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="card" style={{ borderTop: "4px solid var(--success)", textAlign: "center" }}>
+          <h2 className="form-label" style={{ textTransform: "uppercase" }}>Total Keuntungan</h2>
+          <div className="text-success" style={{ fontSize: "2rem", fontWeight: "700" }}>
+            Rp {totalProfit.toLocaleString('id-ID')}
+          </div>
         </div>
-      </main>
+
+        <div className="card" style={{ borderTop: "4px solid var(--warning)", textAlign: "center" }}>
+          <h2 className="form-label" style={{ textTransform: "uppercase" }}>Sparepart Harus Re-Stock</h2>
+          <div className="text-warning" style={{ fontSize: "2rem", fontWeight: "700" }}>
+            {criticalParts.length}
+          </div>
+        </div>
+      </div>
+
+      <h2 className="text-danger mt-4" style={{ fontSize: "1rem" }}>PERINGATAN SPAREPART CRITICAL (STOK MINIM)</h2>
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Part Number</th>
+              <th>Nama Sparepart</th>
+              <th>Stok Akhir</th>
+              <th>Batas Minimum</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {criticalParts.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-muted" style={{ textAlign: "center" }}>Semua Stok Aman</td>
+              </tr>
+            ) : (
+              criticalParts.map(part => (
+                <tr key={part.id}>
+                  <td className="text-accent" style={{ fontWeight: "600" }}>{part.partNumber}</td>
+                  <td>{part.name}</td>
+                  <td className="text-danger" style={{ fontWeight: "700" }}>{part.currentStock}</td>
+                  <td>{part.minStock}</td>
+                  <td><span className="badge badge-danger">Kritis</span></td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
