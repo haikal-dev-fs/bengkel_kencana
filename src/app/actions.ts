@@ -173,66 +173,69 @@ export async function createTransaction(data: {
     type: "SPAREPART" | "SERVICE";
     id: string;
     qty: number;
-    price: number; // selling price
-    cost: number; // purchase price for profit calculation
+    price: number;
+    cost: number;
   }[];
 }) {
-  await prisma.$transaction(async (tx) => {
-    // Generate WO id secara aman di server untuk mencegah duplikat jika form stale
-    const id = await generateId("WO", "transaction", tx);
-    
-    // Buat transaksi
-    const transaction = await tx.transaction.create({
-      data: {
-        id,
-        woNumber: id,
-        plateNumber: data.plateNumber,
-        customerName: data.customerName,
-      },
-    });
-
-    // Buat Items
-    for (const item of data.items) {
-      const totalSelling = item.price * item.qty;
-      const totalPurchase = item.cost * item.qty;
-      const profit = totalSelling - totalPurchase;
-
-      const itemId = await generateId("ITEM", "transactionItem", tx);
-
-      await tx.transactionItem.create({
+  try {
+    await prisma.$transaction(async (tx) => {
+      const id = await generateId("WO", "transaction", tx);
+      
+      const transaction = await tx.transaction.create({
         data: {
-          id: itemId,
-          transactionId: transaction.id,
-          itemType: item.type,
-          qty: item.qty,
-          sellingPrice: item.price,
-          totalSelling,
-          purchasePrice: item.cost,
-          totalPurchase,
-          profit,
-          sparepartId: item.type === "SPAREPART" ? item.id : null,
-          serviceId: item.type === "SERVICE" ? item.id : null,
+          id,
+          woNumber: id,
+          plateNumber: data.plateNumber,
+          customerName: data.customerName,
         },
       });
 
-      // Kurangi stok jika itu sparepart
-      if (item.type === "SPAREPART") {
-        await tx.sparepart.update({
-          where: { id: item.id },
+      for (const item of data.items) {
+        const totalSelling = item.price * item.qty;
+        const totalPurchase = item.cost * item.qty;
+        const profit = totalSelling - totalPurchase;
+
+        const itemId = await generateId("ITEM", "transactionItem", tx);
+
+        await tx.transactionItem.create({
           data: {
-            currentStock: {
-              decrement: item.qty,
-            },
+            id: itemId,
+            transactionId: transaction.id,
+            itemType: item.type,
+            qty: item.qty,
+            sellingPrice: item.price,
+            totalSelling,
+            purchasePrice: item.cost,
+            totalPurchase,
+            profit,
+            sparepartId: item.type === "SPAREPART" ? item.id : null,
+            serviceId: item.type === "SERVICE" ? item.id : null,
           },
         });
-      }
-    }
-  });
 
-  revalidatePath("/transactions");
-  revalidatePath("/sparepart");
-  revalidatePath("/reports");
-  revalidatePath("/");
+        if (item.type === "SPAREPART") {
+          await tx.sparepart.update({
+            where: { id: item.id },
+            data: {
+              currentStock: {
+                decrement: item.qty,
+              },
+            },
+          });
+        }
+      }
+    });
+
+    revalidatePath("/transactions");
+    revalidatePath("/sparepart");
+    revalidatePath("/reports");
+    revalidatePath("/");
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("Create Transaction Error:", error);
+    return { error: error.message || "Unknown error" };
+  }
 }
 
 export async function deleteTransaction(id: string) {
@@ -278,79 +281,86 @@ export async function updateTransaction(id: string, data: {
     cost: number;
   }[];
 }) {
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
-    include: { items: true },
-  });
+  try {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id },
+      include: { items: true },
+    });
 
-  if (!transaction) throw new Error("Transaksi tidak ditemukan.");
+    if (!transaction) return { error: "Transaksi tidak ditemukan." };
 
-  const isExpired = (new Date().getTime() - new Date(transaction.createdAt).getTime()) > 24 * 60 * 60 * 1000;
-  if (isExpired) {
-    throw new Error("Gagal: Transaksi sudah lebih dari 24 jam dan tidak dapat diubah.");
-  }
-
-  await prisma.$transaction(async (tx) => {
-    // 1. Restore old stock
-    for (const oldItem of transaction.items) {
-      if (oldItem.itemType === "SPAREPART" && oldItem.sparepartId) {
-        await tx.sparepart.update({
-          where: { id: oldItem.sparepartId },
-          data: { currentStock: { increment: oldItem.qty } },
-        });
-      }
+    const isExpired = (new Date().getTime() - new Date(transaction.createdAt).getTime()) > 24 * 60 * 60 * 1000;
+    if (isExpired) {
+      return { error: "Gagal: Transaksi sudah lebih dari 24 jam dan tidak dapat diubah." };
     }
 
-    // 2. Delete old items
-    await tx.transactionItem.deleteMany({
-      where: { transactionId: id },
-    });
+    await prisma.$transaction(async (tx) => {
+      // 1. Restore old stock
+      for (const oldItem of transaction.items) {
+        if (oldItem.itemType === "SPAREPART" && oldItem.sparepartId) {
+          await tx.sparepart.update({
+            where: { id: oldItem.sparepartId },
+            data: { currentStock: { increment: oldItem.qty } },
+          });
+        }
+      }
 
-    // 3. Update transaction basic info
-    await tx.transaction.update({
-      where: { id },
-      data: {
-        plateNumber: data.plateNumber,
-        customerName: data.customerName,
-      },
-    });
+      // 2. Delete old items
+      await tx.transactionItem.deleteMany({
+        where: { transactionId: id },
+      });
 
-    // 4. Create new items and deduct stock
-    for (const item of data.items) {
-      const totalSelling = item.price * item.qty;
-      const totalPurchase = item.cost * item.qty;
-      const profit = totalSelling - totalPurchase;
-      const itemId = await generateId("ITEM", "transactionItem", tx);
-
-      await tx.transactionItem.create({
+      // 3. Update transaction basic info
+      await tx.transaction.update({
+        where: { id },
         data: {
-          id: itemId,
-          transactionId: id,
-          itemType: item.type,
-          qty: item.qty,
-          sellingPrice: item.price,
-          totalSelling,
-          purchasePrice: item.cost,
-          totalPurchase,
-          profit,
-          sparepartId: item.type === "SPAREPART" ? item.id : null,
-          serviceId: item.type === "SERVICE" ? item.id : null,
+          plateNumber: data.plateNumber,
+          customerName: data.customerName,
         },
       });
 
-      if (item.type === "SPAREPART") {
-        await tx.sparepart.update({
-          where: { id: item.id },
-          data: { currentStock: { decrement: item.qty } },
-        });
-      }
-    }
-  });
+      // 4. Create new items and deduct stock
+      for (const item of data.items) {
+        const totalSelling = item.price * item.qty;
+        const totalPurchase = item.cost * item.qty;
+        const profit = totalSelling - totalPurchase;
+        const itemId = await generateId("ITEM", "transactionItem", tx);
 
-  revalidatePath("/transactions");
-  revalidatePath("/reports");
-  revalidatePath("/sparepart");
-  revalidatePath("/");
+        await tx.transactionItem.create({
+          data: {
+            id: itemId,
+            transactionId: id,
+            itemType: item.type,
+            qty: item.qty,
+            sellingPrice: item.price,
+            totalSelling,
+            purchasePrice: item.cost,
+            totalPurchase,
+            profit,
+            sparepartId: item.type === "SPAREPART" ? item.id : null,
+            serviceId: item.type === "SERVICE" ? item.id : null,
+          },
+        });
+
+        if (item.type === "SPAREPART") {
+          await tx.sparepart.update({
+            where: { id: item.id },
+            data: { currentStock: { decrement: item.qty } },
+          });
+        }
+      }
+    });
+
+    revalidatePath("/transactions");
+    revalidatePath("/reports");
+    revalidatePath("/sparepart");
+    revalidatePath("/");
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Update Transaction Error:", error);
+    return { error: error.message || "Unknown error" };
+  }
 }
 
 export async function updateSetting(data: { name: string; address: string; phone: string }) {

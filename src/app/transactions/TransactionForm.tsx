@@ -84,7 +84,7 @@ export default function TransactionForm({
     const formData = new FormData(form);
     try {
       if (initialData) {
-        await updateTransaction(initialData.id, {
+        const res = await updateTransaction(initialData.id, {
           plateNumber,
           customerName,
           items: items.map((i) => ({
@@ -95,11 +95,16 @@ export default function TransactionForm({
             cost: i.cost,
           })),
         });
+
+        if (res?.error) {
+          throw new Error(res.error);
+        }
+
         Swal.fire("Berhasil!", "Transaksi berhasil diperbarui!", "success").then(() => {
           window.location.href = "/transactions";
         });
       } else {
-        await createTransaction({
+        const res = await createTransaction({
           woNumber: formData.get("woNumber") as string,
           plateNumber,
           customerName,
@@ -111,6 +116,11 @@ export default function TransactionForm({
             cost: i.cost,
           })),
         });
+
+        if (res?.error) {
+          throw new Error(res.error);
+        }
+
         Swal.fire("Berhasil!", "Transaksi berhasil disimpan!", "success");
         setItems([]);
         setCustomerName("");
