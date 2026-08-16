@@ -231,5 +231,124 @@ export async function createTransaction(data: {
 
   revalidatePath("/transactions");
   revalidatePath("/sparepart");
+  revalidatePath("/reports");
+  revalidatePath("/");
+}
+
+export async function deleteTransaction(id: string) {
+  const transaction = await prisma.transaction.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+
+  if (!transaction) throw new Error("Transaksi tidak ditemukan.");
+
+  const isExpired = (new Date().getTime() - new Date(transaction.createdAt).getTime()) > 24 * 60 * 60 * 1000;
+  if (isExpired) {
+    throw new Error("Gagal: Transaksi sudah lebih dari 24 jam dan tidak dapat dihapus.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of transaction.items) {
+      if (item.itemType === "SPAREPART" && item.sparepartId) {
+        await tx.sparepart.update({
+          where: { id: item.sparepartId },
+          data: { currentStock: { increment: item.qty } },
+        });
+      }
+    }
+
+    await tx.transaction.delete({ where: { id } });
+  });
+
+  revalidatePath("/transactions");
+  revalidatePath("/reports");
+  revalidatePath("/sparepart");
+  revalidatePath("/");
+}
+
+export async function updateTransaction(id: string, data: {
+  plateNumber: string;
+  customerName: string;
+  items: {
+    type: "SPAREPART" | "SERVICE";
+    id: string;
+    qty: number;
+    price: number;
+    cost: number;
+  }[];
+}) {
+  const transaction = await prisma.transaction.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+
+  if (!transaction) throw new Error("Transaksi tidak ditemukan.");
+
+  const isExpired = (new Date().getTime() - new Date(transaction.createdAt).getTime()) > 24 * 60 * 60 * 1000;
+  if (isExpired) {
+    throw new Error("Gagal: Transaksi sudah lebih dari 24 jam dan tidak dapat diubah.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Restore old stock
+    for (const oldItem of transaction.items) {
+      if (oldItem.itemType === "SPAREPART" && oldItem.sparepartId) {
+        await tx.sparepart.update({
+          where: { id: oldItem.sparepartId },
+          data: { currentStock: { increment: oldItem.qty } },
+        });
+      }
+    }
+
+    // 2. Delete old items
+    await tx.transactionItem.deleteMany({
+      where: { transactionId: id },
+    });
+
+    // 3. Update transaction basic info
+    await tx.transaction.update({
+      where: { id },
+      data: {
+        plateNumber: data.plateNumber,
+        customerName: data.customerName,
+      },
+    });
+
+    // 4. Create new items and deduct stock
+    for (const item of data.items) {
+      const totalSelling = item.price * item.qty;
+      const totalPurchase = item.cost * item.qty;
+      const profit = totalSelling - totalPurchase;
+      const itemId = await generateId("ITEM", "transactionItem", tx);
+
+      await tx.transactionItem.create({
+        data: {
+          id: itemId,
+          transactionId: id,
+          itemType: item.type,
+          qty: item.qty,
+          sellingPrice: item.price,
+          totalSelling,
+          purchasePrice: item.cost,
+          totalPurchase,
+          profit,
+          sparepartId: item.type === "SPAREPART" ? item.id : null,
+          serviceId: item.type === "SERVICE" ? item.id : null,
+        },
+      });
+
+      if (item.type === "SPAREPART") {
+        await tx.sparepart.update({
+          where: { id: item.id },
+          data: { currentStock: { decrement: item.qty } },
+        });
+      }
+    }
+  });
+
+  revalidatePath("/transactions");
+  revalidatePath("/reports");
+  revalidatePath("/sparepart");
   revalidatePath("/");
 }

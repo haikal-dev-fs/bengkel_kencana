@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import Swal from "sweetalert2";
+import { deleteTransaction } from "@/app/actions";
 
 export default function TransactionHistoryClient({ transactions }: { transactions: any[] }) {
   const [search, setSearch] = useState("");
@@ -40,6 +42,27 @@ export default function TransactionHistoryClient({ transactions }: { transaction
 
   // Handle Pagination
   const totalPages = Math.ceil(sorted.length / itemsPerPage);
+  const handleDelete = async (id: string, wo: string) => {
+    const result = await Swal.fire({
+      title: "Hapus Transaksi?",
+      text: `Apakah Anda yakin ingin menghapus transaksi ${wo}? Stok sparepart akan dikembalikan.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "var(--danger)",
+      cancelButtonText: "Batal",
+      confirmButtonText: "Ya, Hapus!"
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await deleteTransaction(id);
+        Swal.fire("Terhapus!", "Transaksi berhasil dihapus dan stok dikembalikan.", "success");
+      } catch (error: any) {
+        Swal.fire("Gagal", error.message || "Gagal menghapus transaksi", "error");
+      }
+    }
+  };
+
   const paginated = useMemo(() => {
     const start = (page - 1) * itemsPerPage;
     return sorted.slice(start, start + itemsPerPage);
@@ -91,6 +114,8 @@ export default function TransactionHistoryClient({ transactions }: { transaction
                 const totalJual = tx.items.reduce((sum: number, item: any) => sum + (item.totalSelling || (item.qty * item.sellingPrice) || 0), 0);
                 const totalProfit = tx.items.reduce((sum: number, item: any) => sum + (item.profit || 0), 0);
                 
+                const isEditable = (new Date().getTime() - new Date(tx.createdAt).getTime()) < 24 * 60 * 60 * 1000;
+
                 return (
                   <tr key={tx.id}>
                     <td style={{ fontWeight: "bold", color: "var(--primary)" }}>{tx.woNumber}</td>
@@ -117,13 +142,23 @@ export default function TransactionHistoryClient({ transactions }: { transaction
                   <td style={{ fontWeight: "bold" }}>Rp {totalJual.toLocaleString("id-ID")}</td>
                   <td style={{ color: "var(--success)" }}>Rp {totalProfit.toLocaleString("id-ID")}</td>
                   <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      <Link href={`/transactions/${tx.id}/invoice?action=print`} target="_blank" className="btn btn-primary" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", textAlign: "center" }}>
+                    <div style={{ display: "flex", flexDirection: "row", gap: "0.5rem", flexWrap: "wrap", width: "120px" }}>
+                      <Link href={`/transactions/${tx.id}/invoice?action=print`} target="_blank" className="btn btn-primary" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", flex: "1 1 100%" }}>
                         🖨️ Print
                       </Link>
-                      <Link href={`/transactions/${tx.id}/invoice?action=pdf`} target="_blank" className="btn btn-success" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", textAlign: "center", backgroundColor: "#dc2626", borderColor: "#dc2626" }}>
+                      <Link href={`/transactions/${tx.id}/invoice?action=pdf`} target="_blank" className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", flex: "1 1 100%" }}>
                         📄 PDF
                       </Link>
+                      {isEditable && (
+                        <>
+                          <Link href={`/transactions/${tx.id}/edit`} className="btn btn-warning" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", flex: "1 1 100%", backgroundColor: "var(--warning)", color: "white" }}>
+                            ✏️ Edit
+                          </Link>
+                          <button onClick={() => handleDelete(tx.id, tx.woNumber)} className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", flex: "1 1 100%" }}>
+                            🗑️ Hapus
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { createTransaction } from "@/app/actions";
+import { useEffect, useState } from "react";
+import { createTransaction, updateTransaction } from "@/app/actions";
 import SearchableSelect from "@/components/SearchableSelect";
 import CurrencyInput from "@/components/CurrencyInput";
 import Swal from "sweetalert2";
@@ -17,15 +17,27 @@ type ItemOption = {
 export default function TransactionForm({
   options,
   nextWoNumber,
+  initialData,
 }: {
   options: ItemOption[];
   nextWoNumber: string;
+  initialData?: any;
 }) {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>(initialData ? initialData.items.map((i: any) => ({
+    id: i.itemType === "SPAREPART" ? i.sparepartId : i.serviceId,
+    name: i.itemType === "SPAREPART" ? i.sparepart?.name : i.service?.name,
+    price: i.sellingPrice,
+    cost: i.purchasePrice,
+    type: i.itemType,
+    qty: i.qty,
+  })) : []);
+  
   const [selectedItemId, setSelectedItemId] = useState("");
   const [qty, setQty] = useState<number | string>(1);
   const [customPrice, setCustomPrice] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [customerName, setCustomerName] = useState(initialData?.customerName || "");
+  const [plateNumber, setPlateNumber] = useState(initialData?.plateNumber || "");
 
   const handleAddItem = () => {
     const option = options.find((o) => o.id === selectedItemId);
@@ -71,21 +83,39 @@ export default function TransactionForm({
     const form = e.currentTarget;
     const formData = new FormData(form);
     try {
-      await createTransaction({
-        woNumber: formData.get("woNumber") as string,
-        plateNumber: formData.get("plateNumber") as string,
-        customerName: formData.get("customerName") as string,
-        items: items.map((i) => ({
-          type: i.type,
-          id: i.id,
-          qty: i.qty,
-          price: i.price,
-          cost: i.cost,
-        })),
-      });
-      Swal.fire("Berhasil!", "Transaksi berhasil disimpan!", "success");
-      setItems([]);
-      form.reset();
+      if (initialData) {
+        await updateTransaction(initialData.id, {
+          plateNumber,
+          customerName,
+          items: items.map((i) => ({
+            type: i.type,
+            id: i.id,
+            qty: i.qty,
+            price: i.price,
+            cost: i.cost,
+          })),
+        });
+        Swal.fire("Berhasil!", "Transaksi berhasil diperbarui!", "success").then(() => {
+          window.location.href = "/transactions";
+        });
+      } else {
+        await createTransaction({
+          woNumber: formData.get("woNumber") as string,
+          plateNumber,
+          customerName,
+          items: items.map((i) => ({
+            type: i.type,
+            id: i.id,
+            qty: i.qty,
+            price: i.price,
+            cost: i.cost,
+          })),
+        });
+        Swal.fire("Berhasil!", "Transaksi berhasil disimpan!", "success");
+        setItems([]);
+        setCustomerName("");
+        setPlateNumber("");
+      }
     } catch (error: any) {
       Swal.fire("Gagal!", error.message || "Terjadi kesalahan saat menyimpan transaksi.", "error");
     } finally {
@@ -111,12 +141,12 @@ export default function TransactionForm({
         </div>
         <div className="form-group w-full">
           <label className="form-label">Plat Nomor</label>
-          <input type="text" name="plateNumber" className="form-input" required />
+          <input type="text" name="plateNumber" className="form-input" required value={plateNumber} onChange={e => setPlateNumber(e.target.value)} />
         </div>
       </div>
       <div className="form-group">
         <label className="form-label">Nama Pelanggan</label>
-        <input type="text" name="customerName" className="form-input" required />
+        <input type="text" name="customerName" className="form-input" required value={customerName} onChange={e => setCustomerName(e.target.value)} />
       </div>
 
       <div style={{ padding: "1rem", backgroundColor: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
@@ -193,7 +223,7 @@ export default function TransactionForm({
       )}
 
       <button type="submit" className="btn btn-success mt-4" disabled={isSubmitting}>
-        {isSubmitting ? "Menyimpan..." : "Simpan Transaksi"}
+        {isSubmitting ? "Menyimpan..." : (initialData ? "Simpan Perubahan" : "Simpan Transaksi")}
       </button>
     </form>
   );
